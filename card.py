@@ -34,11 +34,11 @@ class Card():
         offset = 1
 
         # If it's 10 or face card value is 10
-        if Rank.Ten <= self.Rank and self.Rank <= Rank.King:
+        if Rank.Ten <= self.rank and self.rank <= Rank.King:
             return 10
         # Otherwise value is face value plus offset
         else:
-            return self.Rank + offset
+            return self.rank + offset
 
     def cc_value(self, card):
         '''
@@ -50,3 +50,23 @@ class Card():
             return 0
         else:
             return 1
+
+    def __repr__(self):
+        s = ""
+
+        if self.rank == Rank.Ace:
+            s += "A"
+        elif self.rank == Rank.Jack:
+            s += "J"
+        elif self.rank == Rank.Queen:
+            s += "Q"
+        elif self.rank == Rank.King:
+            s += "K"
+        else:
+            s += str(self.rank.value + 1)
+
+        return s
+
+    def __str__(self):
+        s = str(self.rank) + " " + str(self.suit)
+        return s
