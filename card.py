@@ -40,13 +40,13 @@ class Card():
         else:
             return self.rank + offset
 
-    def cc_value(self, card):
+    def cc_value(self):
         '''
         Returns the card counting value of the card from the Hi-Lo System
         '''
-        if card.rank == Rank.Ace or Rank.Ten <= card.rank and card.rank <= Rank.King:
+        if self.rank == Rank.Ace or Rank.Ten <= self.rank and self.rank <= Rank.King:
             return -1
-        elif Rank.Seven <= card.rank and card.rank <= Rank.Nine:
+        elif Rank.Seven <= self.rank and self.rank <= Rank.Nine:
             return 0
         else:
             return 1
