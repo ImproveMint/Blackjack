@@ -8,12 +8,15 @@ class Hand():
         self.double = False
         self.split = False
         self.split_aces = False
-        self.value = self.__calculate_blackjack_value()
-        self.blackjack = self.__is_blackjack()
+        self.value = 0
+        self.blackjack = False
+
+        # call these functions to initialize certain values
+        self.__calculate_blackjack_value()
 
     def __calculate_blackjack_value(self):
         '''
-        Returns the blackjack value of this hand
+        Calculates the blackjack value of this hand
         '''
         ace_value = 11
         num_aces = 0
@@ -34,19 +37,16 @@ class Hand():
                 self.soft = True
                 hand_value += ((num_aces - 1) + ace_value)
 
-        return hand_value
+        self.value = hand_value
+        self.__is_blackjack() # called here because if the value changed BJ might change
 
     def __is_blackjack(self):
         if len(self.hand) == 2 and self.value == 21:
-            return True
-        else:
-            return False
+            self.blackjack = True
 
     def add_card(self, card):
-        if self.blackjack:
-            self.blackjack = False
         self.hand.append(card)
-        self.value = self.__calculate_blackjack_value()
+        self.__calculate_blackjack_value()
 
     def double_down(self, card):
         self.add_card(card)
@@ -54,7 +54,7 @@ class Hand():
 
     def split_hand(self):
         assert(len(self.hand) == 2)
-        assert(self.hand[0] == self.hand[1])
+        assert(self.hand[0].blackjack_value() == self.hand[1].blackjack_value())
 
         self.split = True
 
