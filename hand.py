@@ -1,10 +1,13 @@
 from card import Card, Rank, Suit
+from copy import deepcopy
 
 class Hand():
     def __init__(self, hand):
         self.hand = hand
         self.soft = False
         self.double = False
+        self.split = False
+        self.split_aces = False
         self.value = self.__calculate_blackjack_value()
         self.blackjack = self.__is_blackjack()
 
@@ -40,9 +43,45 @@ class Hand():
             return False
 
     def add_card(self, card):
+        if self.blackjack:
+            self.blackjack = False
         self.hand.append(card)
         self.value = self.__calculate_blackjack_value()
 
     def double_down(self, card):
         self.add_card(card)
         self.double = True
+
+    def split_hand(self):
+        assert(len(self.hand) == 2)
+        assert(self.hand[0] == self.hand[1])
+
+        self.split = True
+
+        if self.hand[0].rank == Rank.Ace:
+            self.split_aces = True
+
+        self.hand.pop()
+
+        self.value = self.__calculate_blackjack_value()
+
+    def can_split(self):
+        if len(self.hand) == 2 and self.hand[0].rank == self.hand[1].rank and not self.split:
+            return True
+        return False
+
+    def __str__(self):
+        s = ""
+        for card in self.hand:
+            s += card.__repr__() + " "
+        return s
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__ # Extract the class of the object
+        result = cls.__new__(cls) # Create a new instance of the object based on extracted class
+        memo[id(self)] = result
+
+        for k, v in self.__dict__.items():
+            setattr(result, k, deepcopy(v, memo))
+
+        return result
