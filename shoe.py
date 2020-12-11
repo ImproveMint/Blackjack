@@ -9,12 +9,13 @@ Need this to be fully automated in terms of decision making
 Other considerations
 -Side bets
 -Should I take insurance?
--I think I'll ignore suits all together for now as they only affect some of the side bets
+-I think I'll ignore suits all together for now as they only affect some of the side bets'
+-Optimization can be made where 4 cards have the same value
 '''
 
 from card import Card, Rank, Suit
 from hand import Hand
-import copy
+from copy import deepcopy
 
 class Shoe():
     '''
@@ -26,6 +27,7 @@ class Shoe():
         self.cards_in_shoe = 52*self.DECKS
         self.ranks_left = [4*self.DECKS]*13 # how many cards of each rank remains in the shoe
         self.r_count = 0 # running count
+        self.dealer_probabilities = [0]*7
 
     def draw_probability(self, card):
         '''
@@ -75,135 +77,149 @@ class Shoe():
         self.ranks_left[card.rank]+=1
         self.r_count-=card.cc_value()
 
-    def optimal_strategy(self):
+        assert(sum(self.ranks_left) < 52*self.DECKS)
+        assert(self.cards_in_shoe < 52*self.DECKS)
+
+    def action_probabilities(self, hand, dealer):
+        self.dealer_probabilities = [0]*7
+        self.playout_dealer(dealer)
+
+        hit = self.__hit(hand, dealer, len(hand.hand))
+        print(f"HIT {round(100*hit,2)}% ", end="")
+
+        stand = self.__stand(hand, dealer)
+        print(f"STAND {round(100*stand,2)}% ", end="")
+
+        double = self.__double_down(hand, dealer)
+        print(f"DOUBLE {round(100*double,2)}% ", end="")
+
+        if hand.can_split():
+            split = self.__split(hand, dealer)
+            print(f"SPLIT {round(100*split,2)}% ", end="")
+
+        print("")
+
+    def __split(self, hand, dealer):
         '''
-        Returns the optimal strategy based on the statistics of the shoe
+        Returns the probability of winning a hand if chosen action is split
+        I don't think I need to simulate both hands, they are identical
+        there will be a slight change in shoe dynamics after playing the first hand
+        but it shouldn't matter too much
         '''
-        # should verify optimal strategy with basic strategy.
-        pass
 
-    def optimal_action(self, hand, dealer_card):
+        hand.split_hand()
+        win = 0
+
+        for rank in Rank:
+            new_hand = deepcopy(hand)
+            new_hand.add_card(Card(rank, Suit.Spade))
+            win += self.__hit(new_hand, dealer, len(new_hand.hand)-1)
+
+        return win
+
+    def __hit(self, hand, dealer, index):
         '''
-        Returns the optimal action based on the statistics of the shoe,
-        the player's hand and the dealer's card
+        Returns the probability of winning a hand if action is to hit
         '''
-        # should verify optimal strategy with basic strategy.
-        # of the valid actions which has the greatest reward
 
+        # busted
+        if hand.value > 21:
+            return 0
 
-        actionEV = [0]*4 # Is the expected value from taking each action
+        #This is the 6 card charlie rule, you automatically win
+        elif hand.value <= 21 and len(hand.hand) >= 6:
+            return 1*self.probability_of_hand(hand, index)
 
-        self.__actions(hand, dealer, actionEV)
+        win = 0
 
+        # For each rank we could draw after hitting
+        for rank in Rank:
+            new_hand = deepcopy(hand)
+            new_hand.add_card(Card(rank, Suit.Spade))
 
-        # check if these actions are valid and then search the entire subtree
+            # special case so that we can reuse this method for split actions
+            if new_hand.split_aces:
+                temp = self.probability_of_hand(new_hand, index)*self.__stand(new_hand, dealer)
+                win += temp
+                print(temp)
 
-    def __actions(self, hand, dealer, actionEV):
+            else:
+                win += self.__hit(new_hand, dealer, index)
+                p = self.probability_of_hand(new_hand, index)
+                s = self.__stand(new_hand, dealer)
+                win += p*s
 
-        #Here we have to run all possible actions given a state
+        return win
 
-        hand_value = hand.blackjack_value()
-
-        # player busted
-        if hand_value > 21:
-            return -1
-
-        # have BJ
-        elif hand.blackjack and not hand.double:
-            #playout dealer
-            pass
-
-        # 21 not a BJ
-        elif hand_value == 21 and not hand.blackjack and not hand.double:
-            #playout dealer
-            pass
-
-        # Any other value
-        elif hand_value < 21:
-            # When hit is possible it runs all possible outcomes of hitting
-            if not hand.double:
-                new_hand = hand(hand.hand)
-                for card in Card:
-                    new_hand.add_card(card)
-                    __actions(new_hand, dealer, actionEV)
-
-            # Option to double down
-            elif len(hand.hand) == 2:
-                    new_hand = hand(hand.hand)
-                    new_hand.double = True
-                    for card in Card:
-                        new_hand.add_card(card)
-                        __actions(new_hand, dealer, actionEV)
-
-
-
-        else:
-            print("There shouldn't be any other cases. Bug")
-
-        #if split:
-
-    def double_down(self, hand, dealer):
+    def __double_down(self, hand, dealer):
         '''
         Returns the probability of winning a hand if action is to double down
         '''
 
+        #This function can NOT be called if hand consist of more than 2 cards
+        assert(len(hand.hand) == 2)
+        #this function should not be called if hand value is 21 or busted
+        assert(hand.value < 21)
+
         win = 0
 
-        #Double check we can and 'should' double
-        if len(hand.hand) == 2 and hand.value < 21:
+        # For each rank we could draw after doubling down
+        # goal is to find what percentage of time we win vs lose
+        for rank in Rank:
+            new_hand = deepcopy(hand)
+            new_hand.add_card(Card(rank, Suit.Spade))
 
-            dealer_probs = [0]*7
-            self.dealer_playout(dealer, dealer_probs) # By calculating this once we greatly reduce computation but lose a bit of accuracy
+            prob = self.draw_probability(Card(rank, Suit.Spade))
 
-            # For each rank we could draw after doubling down
-            # goal is to find what percentage of time we win vs lose
-            for rank in Rank:
-                new_hand = Hand(copy.deepcopy(hand.hand))
-                new_hand.double = True
-                new_hand.add_card(Card(rank, Suit.Spade))
+            win+=prob*self.win_prob(new_hand)
 
-                prob = self.draw_probability(Card(rank, Suit.Spade)) # removing a card ! need to add back
-
-                win+=prob*self.win_prob(new_hand, dealer_probs)
-
-                self.__add_card(Card(rank, Suit.Spade)) # add card back into shoe
-                #print(f"Win prob {round(self.win_prob(new_hand, dealer_probs)*100, 2)}% with a {new_hand.value}")
+            #print(f"Win prob {round(self.win_prob(new_hand, self.dealer_probabilities)*100, 2)}% with a {new_hand.value}")
 
         return win
 
-    def win_prob(self, hand, d):
+    def __stand(self, hand, dealer):
+        '''
+        Returns the probability of winning if action is to stand
+        '''
+
+        return self.win_prob(hand)
+
+    def win_prob(self, hand):
         '''
         Returns the probability of winning with a hand against all possible
-        outcomes of the dealer. P(win) + P(lose) = 1. I believe so by calculating
+        outcomes of the dealer. P(win) + P(lose) = 1. So, I believe by calculating
         probabilty of winning we also get losing probability
         '''
         value = hand.value
         win = 0
 
+        # Player busted
         if value > 21:
-            return win
+            win = 0
 
+        # Player has BJ and so only pushes against a dealer's BJ
         elif hand.blackjack:
-            win = sum(d) - d[5]/2# it's a push if both have BJ so I think divided in 2 is equivalent
+            win = sum(self.dealer_probabilities) - self.dealer_probabilities[5]/2# it's a push if both have BJ so I think divided in 2 is equivalent
 
         elif value == 21:
-            win = sum(d) - (d[4]/2) - d[5] # here we have 21 so we push against 21, lose to dealer's BJ and win all other times
+            win = sum(self.dealer_probabilities) - (self.dealer_probabilities[4]/2) - self.dealer_probabilities[5] # here we have 21 so we push against 21, lose to dealer's BJ and win all other times
+
         #Any hand that didn't bust and is not blackjack
         else:
-            for x in range(len(d)-3):
+            for x in range(len(self.dealer_probabilities)-3):
                 if value > x + 17:
-                    win += d[x]
+                    win += self.dealer_probabilities[x]
                 elif value == x + 17:
-                    win += (d[x]/2)
-            win += d[6] #Beats all busted hands
+                    win += (self.dealer_probabilities[x]/2)
+            win += self.dealer_probabilities[6] #Beats all busted hands
 
         return win
 
-    def dealer_playout(self, dealers_hand, probabilities):
+    def playout_dealer(self, dealers_hand):
         '''
         Plays out the dealer's hand according to a specific set of rules dependent
-        on the casino. While simultaneously building a list of probabilities of
-        the different outcomes for the dealer
+        on the casino. While simultaneously building a list of outcome probabilities
+        for the dealer
 
         There are 7 possible outcomes for the dealer and are stored in the prob. list
         p[0] = P(hand_value == 17)
@@ -215,33 +231,33 @@ class Shoe():
         p[6] = P(hand_value > 21) # busted
         '''
         value = dealers_hand.value
-        index = 1
+        index = 1 # Always 1 since once the dealer starts playing we have no control
 
         # Dealer reached stopping condition
         if value >= 17:
 
             #Dealer has BJ
             if dealers_hand.blackjack:
-                probabilities[5] += self.probability_of_hand(dealers_hand, index)
+                self.dealer_probabilities[5] += self.probability_of_hand(dealers_hand, index)
 
             #Dealer busted
             elif value > 21:
-                probabilities[6] += self.probability_of_hand(dealers_hand, index)
+                self.dealer_probabilities[6] += self.probability_of_hand(dealers_hand, index)
 
             #Dealer has some value between 17 and 21 but not BJ
             else:
-                probabilities[value-17] += self.probability_of_hand(dealers_hand, index)
+                self.dealer_probabilities[value-17] += self.probability_of_hand(dealers_hand, index)
 
-            return probabilities
+            return self.dealer_probabilities
 
         #Another card needs to be drawn for the dealer
         else:
             for rank in Rank:
-                new_hand = Hand(copy.deepcopy(dealers_hand.hand))
+                new_hand = deepcopy(dealers_hand)
                 new_hand.add_card(Card(rank, Suit.Spade)) # suit is arbitrary
-                self.dealer_playout(new_hand, probabilities)
+                self.playout_dealer(new_hand)
 
-        return probabilities
+        return self.dealer_probabilities
 
     def probability_of_hand(self, hand, index):
         '''
@@ -252,7 +268,8 @@ class Shoe():
 
         # make copies so that variables can be set back to orginal values after calculations
         copy_cards_in_shoe = self.cards_in_shoe
-        copy_ranks_left = copy.deepcopy(self.ranks_left)
+        copy_ranks_left = deepcopy(self.ranks_left)
+        count = self.r_count
 
         prob = 1
 
@@ -263,5 +280,6 @@ class Shoe():
         # reinstate original shoe statistic values
         self.cards_in_shoe = copy_cards_in_shoe
         self.ranks_left = copy_ranks_left
+        self.r_count = count
 
         return prob
