@@ -2,8 +2,8 @@ from card import Card, Rank, Suit
 from copy import deepcopy
 
 class Hand():
-    def __init__(self, hand):
-        self.hand = hand
+    def __init__(self, cards):
+        self.cards = cards
         self.soft = False
         self.double = False
         self.split = False
@@ -22,7 +22,7 @@ class Hand():
         num_aces = 0
         hand_value = 0
 
-        for card in self.hand:
+        for card in self.cards:
 
             if card.rank == Rank.Ace:
                 num_aces+=1
@@ -41,11 +41,11 @@ class Hand():
         self.__is_blackjack() # called here because if the value changed BJ might change
 
     def __is_blackjack(self):
-        if len(self.hand) == 2 and self.value == 21:
+        if len(self.cards) == 2 and self.value == 21:
             self.blackjack = True
 
     def add_card(self, card):
-        self.hand.append(card)
+        self.cards.append(card)
         self.__calculate_blackjack_value()
 
     def double_down(self, card):
@@ -53,26 +53,26 @@ class Hand():
         self.double = True
 
     def split_hand(self):
-        assert(len(self.hand) == 2)
-        assert(self.hand[0].blackjack_value() == self.hand[1].blackjack_value())
+        assert(len(self.cards) == 2)
+        assert(self.cards[0].blackjack_value() == self.cards[1].blackjack_value())
 
         self.split = True
 
-        if self.hand[0].rank == Rank.Ace:
+        if self.cards[0].rank == Rank.Ace:
             self.split_aces = True
 
-        self.hand.pop()
+        self.cards.pop()
 
         self.value = self.__calculate_blackjack_value()
 
     def can_split(self):
-        if len(self.hand) == 2 and self.hand[0].rank == self.hand[1].rank and not self.split:
+        if len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank and not self.split:
             return True
         return False
 
     def __str__(self):
         s = ""
-        for card in self.hand:
+        for card in self.cards:
             s += card.__repr__() + " "
         return s
 

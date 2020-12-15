@@ -6,6 +6,7 @@ from copy import deepcopy
 from card import Card, Rank, Suit
 from hand import Hand
 from shoe import Shoe
+from constants import Action
 
 def probability_of_card(shoe, card):
     '''
@@ -34,9 +35,9 @@ def probability_of_hand(shoe, hand, index):
 
     prob = 1
 
-    for card in range(index, len(hand.hand)):
-        prob*=probability_of_card(shoe, hand.hand[card])
-        shoe.draw(hand.hand[card])
+    for card in range(index, len(hand.cards)):
+        prob*=probability_of_card(shoe, hand.cards[card])
+        shoe.draw(hand.cards[card])
 
     # reinstate values so shoe statistics remain unchanged
     shoe.cards_in_shoe = copy_cards_in_shoe
@@ -82,29 +83,26 @@ def probability_of_basic_actions_winning(shoe, hand, dealer):
     # single card. I imagine the difference in choice has to do with the odds
     # if your odds are in your favour you should increase your bet size
     dealer_probs = dealer.dealer_outcome_probs()
-
-    assert(round(sum(dealer_probs),2) == 1.00)
-
     action_probs = [0, 0, 0, 0] # hit | stand | double | split
 
-    hit = basic_hit(shoe, hand, dealer, len(hand.hand), dealer_probs)
-    action_probs[0] = hit
-    print(f"HIT {round(100*hit,2)}% ", end="")
+    hit = basic_hit(shoe, hand, dealer, len(hand.cards), dealer_probs)
+    action_probs[Action.HIT] = hit
+    # print(f"HIT {round(100*hit,2)}% ", end="")
 
     stand = basic_stand(hand, dealer, dealer_probs)
-    action_probs[1] = stand
-    print(f"STAND {round(100*stand,2)}% ", end="")
+    action_probs[Action.STAND] = stand
+    # print(f"STAND {round(100*stand,2)}% ", end="")
 
     double = hit
-    action_probs[2] = double
-    print(f"DOUBLE {round(100*double,2)}% ", end="")
+    action_probs[Action.DOUBLE] = double
+    # print(f"DOUBLE {round(100*double,2)}% ", end="")
 
     if hand.can_split():
-        split = basic_split(hand, dealer)
-        action_probs[3] = split
-        print(f"SPLIT {round(100*split,2)}% ", end="")
+        split = basic_split(shoe, hand, dealer, dealer_probs)
+        action_probs[Action.SPLIT] = split
+        # print(f"SPLIT {round(100*split,2)}% ", end="")
 
-    print("")
+    # print("")
 
     return action_probs
 
@@ -116,24 +114,32 @@ def probability_of_complete_actions_winning(shoe, hand, dealer):
 
     action_probs = [0, 0, 0, 0] # hit | stand | double | split
 
-    hit = complete_hit(shoe, hand, dealer, len(hand.hand), dealer_probs)
+    print(hand)
+
+    hit = complete_hit(shoe, hand, dealer, len(hand.cards), dealer_probs)
     action_probs[0] = hit
-    print(f"HIT {round(100*hit,2)}% ", end="")
+    # print(f"HIT {round(100*hit,2)}% ", end="")
+
+    print(hand)
 
     stand = basic_stand(hand, dealer, dealer_probs) # stand is same in every case
     action_probs[1] = stand
-    print(f"STAND {round(100*stand,2)}% ", end="")
+    # print(f"STAND {round(100*stand,2)}% ", end="")
+
+    print(hand)
 
     double = complete_double(shoe, hand, dealer_probs)
     action_probs[2] = double
-    print(f"DOUBLE {round(100*double,2)}% ", end="")
 
-    if hand.can_split():
-        split = complete_split(hand, dealer)
-        action_probs[3] = split
-        print(f"SPLIT {round(100*split,2)}% ", end="")
+    print(hand)
+    # print(f"DOUBLE {round(100*double,2)}% ", end="")
 
-    print("")
+    # if hand.can_split():
+    #     split = complete_split(hand, dealer)
+    #     action_probs[3] = split
+    #     print(f"SPLIT {round(100*split,2)}% ", end="")
+
+    # print("")
 
     return action_probs
 
@@ -146,6 +152,23 @@ def basic_hit(shoe, hand, dealer, index, dealer_probs):
     '''
 
     win = 0
+
+    # Hand is already perfect no need to hit - hitting would not necessarily make you lose but there's no advantage
+    if hand.blackjack:
+        return 0
+
+    if hand.value == 21:
+        hand_prob = probability_of_hand(shoe, hand, index)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
+        return win
+
+    # special rule that you can't hit after splitting aces
+    elif hand.split_aces:
+        hand_prob = probability_of_hand(shoe, hand, 1)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
+        return win
 
     # the hand is hit with each possible card rank
     for rank in Rank:
@@ -162,10 +185,9 @@ def basic_stand(hand, dealer, dealer_probs):
     '''
     Returns the probability of winning if player stands
     '''
-
     return probability_of_winning(hand, dealer_probs)
 
-def basic_split(hand, dealer):
+def basic_split(shoe, hand, dealer, dealer_probs):
     '''
     Returns the probability of winning a hand if chosen action is split
     I don't think I need to simulate both hands, they are identical
@@ -179,9 +201,7 @@ def basic_split(hand, dealer):
         new_hand = deepcopy(hand)
         new_hand.split_hand()
         new_hand.add_card(Card(rank, Suit.Spade))
-        # print(new_hand)
-        temp = draw_probability(Card(rank, Suit.Spade))*basic_stand(new_hand, dealer)
-        win += temp
+        win += probability_of_card(shoe, Card(rank, Suit.Spade))*basic_stand(new_hand, dealer, dealer_probs)
     return win
 
 def complete_hit(shoe, hand, dealer, index, dealer_probs):
@@ -189,32 +209,52 @@ def complete_hit(shoe, hand, dealer, index, dealer_probs):
     Returns the probability of winning a hand if action is to hit
     '''
 
+    win = 0
+
     # busted
     if hand.value > 21:
         return 0
 
-    #This is the 6 card charlie rule, you automatically win
-    elif hand.value <= 21 and len(hand.hand) >= 6:
-        return 1*probability_of_hand(shoe, hand, index)
+    # Hand is already perfect no need to hit - hitting would not necessarily make you lose but there's no advantage
+    elif hand.blackjack:
+        return 0
 
-    win = 0
+    elif hand.value == 21:
+        hand_prob = probability_of_hand(shoe, hand, index)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
+        return win
+
+    # special rule that you can't hit after splitting aces
+    elif hand.split_aces:
+        hand_prob = probability_of_hand(shoe, hand, 1)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
+        return win
+
+    #This is the 6 card charlie rule, you automatically win
+    elif hand.value <= 21 and len(hand.cards) >= 6:
+        prob = probability_of_hand(shoe, hand, index)
+        return prob # charlies win 100% of the time they are dealt
 
     # For each rank we could draw after hitting
-    for rank in Rank:
-        new_hand = deepcopy(hand)
-        new_hand.add_card(Card(rank, Suit.Spade))
+    if len(hand.cards) == index:
+        for rank in range(Rank(0), Rank.King + 1):
+            new_hand = deepcopy(hand)
+            new_hand.add_card(Card(Rank(rank), Suit.Spade))
 
-        # special case so that we can reuse this method for split actions
-        if new_hand.split_aces:
-            temp = probability_of_hand(shoe, new_hand, index)*basic_stand(new_hand, dealer, dealer_probs)
-            win += temp
-            print(temp)
-
-        else:
             win += complete_hit(shoe, new_hand, dealer, index, dealer_probs)
-            p = probability_of_hand(shoe, new_hand, index)
-            s = basic_stand(new_hand, dealer, dealer_probs)
-            win += p*s
+    else:
+        for rank in range(hand.cards[-1].rank, Rank.King + 1):
+            new_hand = deepcopy(hand)
+            new_hand.add_card(Card(Rank(rank), Suit.Spade))
+
+            win += complete_hit(shoe, new_hand, dealer, index, dealer_probs)
+
+    if len(hand.cards) > index:
+        hand_prob = probability_of_hand(shoe, hand, index)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
 
     return win
 
@@ -224,11 +264,21 @@ def complete_double(shoe, hand, dealer_probs):
     '''
 
     #This function can NOT be called if hand consist of more than 2 cards
-    assert(len(hand.hand) == 2)
+    #assert(len(hand.cards) == 2)
     #this function should not be called if hand value is 21 or busted
-    assert(hand.value < 21)
+    #assert(hand.value < 21)
 
     win = 0
+
+    # Hand is already perfect no need to hit - hitting would not necessarily make you lose but there's no advantage
+    if hand.blackjack:
+        return 0
+
+    if hand.value == 21:
+        hand_prob = probability_of_hand(shoe, hand, index)
+        win_prob = basic_stand(hand, dealer, dealer_probs)
+        win += hand_prob*win_prob
+        return win
 
     # For each rank we could draw after doubling down
     # goal is to find what percentage of time we win vs lose
@@ -242,20 +292,21 @@ def complete_double(shoe, hand, dealer_probs):
 
     return win
 
-def complete_split(hand, dealer):
+def complete_split(shoe, hand, dealer):
     '''
     Returns the probability of winning a hand if chosen action is split
-    I don't think I need to simulate both hands, they are identical
+    I don't think I need to simulate both hands, they are identical in expectation
     there will be a slight change in shoe dynamics after playing the first hand
-    but it shouldn't matter too much
+    but it shouldn't matter enough to warrant double the computation
     '''
+    dealer_probs = dealer.dealer_outcome_probs()
 
-    hand.split_hand()
+    hand.split_hand() # Split hand - removes a card
     win = 0
 
     for rank in Rank:
         new_hand = deepcopy(hand)
-        new_hand.add_card(Card(rank, Suit.Spade))
-        win += basic_hit(new_hand, dealer, len(new_hand.hand)-1)
+        new_hand.add_card(Card(rank, Suit.Spade)) # adds a second card (auto hit)
+        win += complete_hit(shoe, new_hand, dealer, 1, dealer_probs) # then calls hit to run all simulations after hit
 
     return win

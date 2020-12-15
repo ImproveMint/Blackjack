@@ -2,9 +2,11 @@ from hand import Hand
 from card import Card, Rank, Suit
 from shoe import Shoe
 from copy import deepcopy
-import probability
+import probability, random
 
 class Dealer():
+
+    poss = 0
 
     # Dealer defaults to the strategy I need for my application
     def __init__(self, shoe, stand=17, hit_soft=False):
@@ -30,6 +32,16 @@ class Dealer():
         self.hand = None
         self.up_card = None
 
+    def playout_hand(self):
+        #Not good but I just want to get it working
+        #not proper probability distribution
+
+        while self.hand.value < self.stand_min:
+            card = Card(Rank(random.randint(Rank.Ace, Rank.King)), Suit.Spade)
+            self.hand.add_card(card)
+
+        return self.hand.value
+
     def dealer_outcome_probs(self):
         '''
         Returns the probabilities of possible outcomes for the dealer
@@ -40,7 +52,6 @@ class Dealer():
         if self.hand is not None:
             self.dealer_outcome_probabilities = [0]*7
             self.__dealer_outcome_probs(self.hand)
-
             return self.dealer_outcome_probabilities
         else:
             print("No dealer hand provided")
@@ -59,6 +70,9 @@ class Dealer():
         p[4] = P(hand_value == 21)
         p[5] = P(hand_value == BJ) # 21 with only 2 cards
         p[6] = P(hand_value > 21) # busted
+
+        At the very minimum we know that 3 cards are taken from the shoe and we
+        also know the dealer's up card.
         '''
         value = hand.value
         index = 1 # always 1 since once the dealer starts playing we have no control
@@ -66,8 +80,17 @@ class Dealer():
         # dealer reached stopping condition add the probability of getting this hand to list
         if value > self.stand_min or (value == self.stand_min and not self.hit_soft):
 
+            # checks that number of cards of each rank didn't exceed shoe's capacity
+            ranks_left = deepcopy(self.shoe.ranks_left)
+
+            for card in hand.cards:
+                ranks_left[card.rank] = ranks_left[card.rank] -1;
+
+            if(min(ranks_left) < 0):
+                return
+
             #Dealer has BJ
-            if hand.blackjack:
+            elif hand.blackjack:
                 self.dealer_outcome_probabilities[5] += probability.probability_of_hand(self.shoe, hand, index)
 
             #Dealer busted
@@ -78,7 +101,7 @@ class Dealer():
             else:
                 self.dealer_outcome_probabilities[value-17] += probability.probability_of_hand(self.shoe, hand, index)
 
-            return # base condition return
+            return
 
         # otherwise dealer hits
         else:
