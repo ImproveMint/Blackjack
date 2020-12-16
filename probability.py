@@ -25,7 +25,7 @@ def prob_cards(hand, index=0, shoe=None):
     Eg the probability of drawing an ace and then a king is (4/52)*(4/51) for a single deck shoe.
     If an index is provided it will ignore the cards that are before the index.
 
-    Assumes cards have not already been drawn from shoe! That is because this
+    Assumes cards have not been drawn from shoe! That is because this
     function's purpose is to simulate different outcomes.
     '''
 
@@ -91,182 +91,95 @@ def prob_outcomes(hand, dealer_probs):
 
     return outcomes
 
-def single_action_rewards(hand, dealer):
+def action_ev(hand, dealer):
     '''
-    Returns the EV for each possible move looking one step into the future.
-    I believe this is how basic strategy was created.
+    Returns the expected value/reward of each possible action given a hand and the
+    dealer's upcard
+
+    Assumptions: Infinite shoe
     '''
 
-    dealer_probs = dealer.dealer_outcome_probs()
-    expected_value = [0, 0, 0, 0] # hit | stand | double | split
+    dealer_probs = dealer.outcome_probs()
 
-    hit = basic_hit(hand, dealer, len(hand.cards), dealer_probs)
-    expected_value[Action.HIT] = hit
+    #Initialized to a value that will never be chosen IE must be updated
+    expected_reward = [-2, -2, -2, -2] # hit | stand | double | split
 
-    stand = basic_stand(hand, dealer_probs)
-    expected_value[Action.STAND] = stand
+    # Can not hit if you have blackjack
+    if hand.can_hit():
+        expected_reward[Action.HIT] = hit(hand, len(hand.cards), dealer_probs)
 
-    double = 2*hit # 1 action look ahead makes double and hit the same action
-    expected_value[Action.DOUBLE] = double
+    # Can always stand
+    expected_reward[Action.STAND] = stand(hand, dealer_probs)
+
+    if hand.can_double():
+        expected_reward[Action.DOUBLE] = double(hand, dealer_probs)
 
     if hand.can_split():
-        split = 2*basic_split(hand, dealer, dealer_probs)
-        expected_value[Action.SPLIT] = split
-        # print(f"SPLIT {round(100*split,2)}% ", end="")
+        expected_reward[Action.SPLIT] = split(hand, dealer_probs)
 
-    # print("")
+    return expected_reward
 
-    print(expected_value)
+def hit(hand, index, dealer_probs):
+    '''
+    Returns the expected reward/value of hitting
 
-    return expected_value
+    Assumptions:    Infinite shoe
+    '''
 
-def __get_expected_reward(hand, dealer_probs, index):
-    discount = 1 # 0.1**(len(hand.cards)-index)
+    ev = 0
+
+    # Hit the hand with every rank in the deck Ace through King
+    for rank in Rank:
+        new_hand = deepcopy(hand)
+        card = Card(rank, Suit.Spade)
+        new_hand.add_card(card)
+
+        # 4 cases:
+        # Hit busted hand
+        if new_hand.sum > 21:
+            ev += prob_cards(new_hand, index)*-1
+
+        # Hit made hand 21
+        elif new_hand.sum == 21:
+            ev += __expected_reward(new_hand, dealer_probs, index)
+
+        # Hit results in another decision - explore better option (recursive)
+        elif not hand.double and not hand.split_aces:
+            # from here we can either hit or stand and we want the better of the 2
+            ev += max(hit(new_hand, index+1, dealer_probs), stand(new_hand, dealer_probs))*prob_card(card)
+
+        # Hit results in another decision but only decision avaiable is to stand
+        else:
+            ev += stand(new_hand, dealer_probs)*prob_card(card)
+
+    return ev
+
+def stand(hand, dealer_probs):
+    '''
+    Returns the expected reward/value of standing
+    '''
+    return __expected_reward(hand, dealer_probs, len(hand.cards))
+
+def double(hand, dealer_probs):
+    '''
+    Returns the expected reward/value of doubling down
+    '''
+    hand.double_down()
+    return 2*hit(hand, 2, dealer_probs)
+
+def split(hand, dealer_probs):
+    '''
+    Returns the expected reward/value of splitting
+    '''
+    hand.split_hand() # Split hand - removes a card
+    return 2*hit(hand, 1, dealer_probs) # then calls hit to run all simulations after hit
+
+def __expected_reward(hand, dealer_probs, index):
+    '''
+    Returns the combined expected value of a hand against all possible outcomes
+    of the dealer
+    '''
     probability_of_hand = prob_cards(hand, index)
     outcome_probabilities = prob_outcomes(hand, dealer_probs)
 
-    return probability_of_hand*(outcome_probabilities[Outcome.WIN] - outcome_probabilities[Outcome.LOSE])*discount
-
-def basic_hit(hand, index, dealer_probs):
-    '''
-    Returns the probability of winning if player hits
-
-    This function looks a single step ahead. IE It hits and then regardless
-    of the value of the hand it stands and plays out the dealer
-    '''
-
-    expected_reward = 0
-
-    # Hand is already perfect no need to hit - hitting would not necessarily
-    # make you lose but there's no advantage so we return a lose
-    if hand.blackjack:
-        return -1
-
-    elif hand.sum == 21:
-        return __get_expected_reward(hand, dealer_probs, index)
-
-    # the hand is hit with each possible card rank
-    for rank in Rank:
-        new_hand = deepcopy(hand)
-        new_hand.add_card(Card(rank, Suit.Spade)) # arbitrary suit
-        expected_reward += __get_expected_reward(new_hand, dealer_probs, index)
-
-    return expected_reward
-
-def basic_stand(hand, dealer_probs):
-    '''
-    Returns the probability of winning if player stands
-    '''
-    outcome_probs = prob_outcomes(hand, dealer_probs)
-
-    return outcome_probs[Outcome.WIN] - outcome_probs[Outcome.LOSE]
-
-def basic_split(hand, dealer, dealer_probs):
-    '''
-    Returns the probability of winning a hand if chosen action is split
-    I don't think I need to simulate both hands, they are identical
-    there will be a slight change in shoe dynamics after playing the first hand
-    but it shouldn't matter too much
-    '''
-
-    expected_reward = 0
-
-    for rank in Rank:
-        new_hand = deepcopy(hand)
-        new_hand.split_hand()
-        new_hand.add_card(Card(rank, Suit.Spade))
-        expected_reward += __get_expected_reward(new_hand, dealer_probs, 1)
-    return expected_reward
-
-def complete_action_rewards(hand, dealer):
-
-    dealer_probs = dealer.outcome_probs()
-    print(dealer_probs)
-
-    assert(round(sum(dealer_probs),2) == 1.00)
-
-    expected_reward = [-1, -1, -1, -1] # hit | stand | double | split
-
-    # Can not hit if you have blackjack
-    if hand.blackjack:
-        expected_reward[Action.HIT] = -1
-    else:
-        hit = complete_hit(hand, dealer, len(hand.cards), dealer_probs)
-        expected_reward[Action.HIT] = hit
-
-    stand = basic_stand(hand, dealer_probs) # stand is same in every case
-    expected_reward[Action.STAND] = stand
-
-    double = complete_double(hand, dealer_probs)
-    expected_reward[Action.DOUBLE] = double
-
-    print(expected_reward)
-
-    return expected_reward
-
-def complete_hit(hand, dealer, index, dealer_probs):
-    '''
-    Returns the probability of winning a hand if action is to hit
-    '''
-
-    win = 0
-
-    # busted
-    if hand.sum > 21:
-        return __get_expected_reward(hand, dealer_probs, index)
-
-    elif hand.sum == 21:
-        return __get_expected_reward(hand, dealer_probs, index)
-
-    # special rule that you can't hit after splitting aces
-    elif hand.split_aces:
-        return __get_expected_reward(hand, dealer_probs, 1)
-
-    #This is the 6 card charlie rule, you automatically win
-    elif hand.sum <= 21 and len(hand.cards) >= 6:
-        prob = prob_cards(hand, index)
-        return prob # charlies win 100% of the time they are dealt
-
-    # For each rank we could draw after hitting
-    if len(hand.cards) == index:
-        for rank in range(Rank(0), Rank.King + 1):
-            new_hand = deepcopy(hand)
-            new_hand.add_card(Card(Rank(rank), Suit.Spade))
-
-            win += complete_hit(new_hand, dealer, index, dealer_probs)
-    else:
-        for rank in range(hand.cards[-1].rank, Rank.King + 1):
-            new_hand = deepcopy(hand)
-            new_hand.add_card(Card(Rank(rank), Suit.Spade))
-
-            win += complete_hit(new_hand, dealer, index, dealer_probs)
-
-    if len(hand.cards) > index:
-        win += __get_expected_reward(hand, dealer_probs, index)
-
-    return win
-
-def complete_double(hand, dealer_probs):
-    '''
-    Returns the probability of winning a hand if action is to double down
-    '''
-    return 2*basic_hit(hand, 2, dealer_probs)
-
-def complete_split(hand, dealer):
-    '''
-    Returns the probability of winning a hand if chosen action is split
-    I don't think I need to simulate both hands, they are identical in expectation
-    there will be a slight change in shoe dynamics after playing the first hand
-    but it shouldn't matter enough to warrant double the computation
-    '''
-    dealer_probs = dealer.dealer_outcome_probs()
-
-    hand.split_hand() # Split hand - removes a card
-    win = 0
-
-    for rank in Rank:
-        new_hand = deepcopy(hand)
-        new_hand.add_card(Card(rank, Suit.Spade)) # adds a second card (auto hit)
-        win += complete_hit(new_hand, dealer, 1, dealer_probs) # then calls hit to run all simulations after hit
-
-    return win
+    return probability_of_hand*(outcome_probabilities[Outcome.WIN] - outcome_probabilities[Outcome.LOSE])
