@@ -8,7 +8,7 @@ class Hand():
         self.double = False
         self.split = False
         self.split_aces = False
-        self.value = 0
+        self.sum = 0
         self.blackjack = False
 
         # call these functions to initialize certain values
@@ -37,19 +37,18 @@ class Hand():
                 self.soft = True
                 hand_value += ((num_aces - 1) + ace_value)
 
-        self.value = hand_value
+        self.sum = hand_value
         self.__is_blackjack() # called here because if the value changed BJ might change
 
     def __is_blackjack(self):
-        if len(self.cards) == 2 and self.value == 21:
+        if len(self.cards) == 2 and self.sum == 21:
             self.blackjack = True
 
     def add_card(self, card):
         self.cards.append(card)
         self.__calculate_blackjack_value()
 
-    def double_down(self, card):
-        self.add_card(card)
+    def double_down(self):
         self.double = True
 
     def split_hand(self):
@@ -63,12 +62,23 @@ class Hand():
 
         self.cards.pop()
 
-        self.value = self.__calculate_blackjack_value()
+        self.sum = self.__calculate_blackjack_value()
 
     def can_split(self):
         if len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank and not self.split:
             return True
         return False
+
+    def can_double(self):
+        if len(self.cards) == 2 and not self.split and not self.double:
+            return True
+        return False
+
+    def can_hit(self):
+        # if hand is 21 or over then hand is completed
+        if self.sum >= 21:
+            return False
+        return True
 
     def __str__(self):
         s = ""
