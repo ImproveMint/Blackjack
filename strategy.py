@@ -1,3 +1,59 @@
+'''
+*Differences in charts may be due to slight variations in rules
+
+My Optimal Hard Strategy
+    2  3  4  5  6  7  8  9  T  A
+8   H  H  H  H  H  H  H  H  H  H
+9   H  D  D  D  D  H  H  H  H  H
+10  D  D  D  D  D  D  D  D  H  H
+11  D  D  D  D  D  D  D  D  H  H
+12  H  H  S  S  S  H  H  H  H  H
+13  S  S  S  S  S  H  H  H  H  H
+14  S  S  S  S  S  H  H  H  H  H
+15  S  S  S  S  S  H  H  H  H  H
+16  S  S  S  S  S  H  H  H  H  H
+17+ S  S  S  S  S  S  S  S  S  S
+
+*DIFFERENCES in my strategy and basic
+    2  3  4  5  6  7  8  9  T  A
+11  .  .  .  .  .  .  .  .  D  .
+
+
+My optimal soft strategy
+    2  3  4  5  6  7  8  9  T  A
+13  H  H  H  H  D  H  H  H  H  H
+14  H  H  H  D  D  H  H  H  H  H
+15  H  H  H  D  D  H  H  H  H  H
+16  H  H  D  D  D  H  H  H  H  H
+17  H  D  D  D  D  H  H  H  H  H
+18  S  d  d  d  d  S  S  H  H  H
+19  S  S  S  S  S  S  S  S  S  S
+
+*Differences in my strategy and basic
+   2  3  4  5  6  7  8  9  T  A
+13 .  .  .  D  .  .  .  .  .  .
+14 .  .  .  .  .  .  .  .  .  .
+15 .  .  D  .  .  .  .  .  .  .
+
+My optimal split strategy differences these should all be splits
+    2  3  4  5  6  7  8  9  T  A
+22  H  H  H  P  P  P  H  H  H  H
+33  H  H  H  P  P  P  H  H  H  H
+44  H  H  H  H  H  H  H  H  H  H
+55  D  D  D  D  D  D  D  D  H  H
+66  H  P  P  P  P  H  H  H  H  H
+77  P  P  P  P  P  P  H  H  H  H
+88  P  P  P  P  P  P  P  P  H  H
+99  P  P  P  P  P  S  P  P  S  S
+TT  S  S  S  S  S  S  S  S  S  S
+
+    2  3  4  5  6  7  8  9  T  A
+22  .  .  P  .  .  .  .  .  .  .
+33  .  .  P  .  .  .  .  .  .  .
+88  .  .  .  .  .  .  .  .  P  P
+'''
+
+
 from pandas import DataFrame
 from card import Card, Rank, Suit
 from hand import Hand
@@ -26,6 +82,7 @@ basic_strat_soft8 = numpy.array([   ['H', 'H', 'D', 'D', 'D', 'H', 'H', 'H', 'H'
                                     ['S', 'D', 'D', 'D', 'D', 'S', 'S', 'H', 'H', 'S'],
                                     ['S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S']])
 
+#These are almost certainly garbage
 complete_strat_hard8 = numpy.array([   ['H', 'H', 'H', 'H', 'H', 'H', 'H', 'H', 'H', 'H'],
                                         ['H', 'H', 'H', 'H', 'H', 'H', 'H', 'H', 'H', 'H'],
                                         ['D', 'D', 'D', 'D', 'D', 'D', 'H', 'H', 'H', 'H'],
@@ -120,7 +177,7 @@ def infinite_complete_action(hand, dealer):
         return complete_strat_hard8[lookup_row, lookup_col]
 '''
 
-def optimal_action(hand, dealer):
+def optimal_action(hand, dealer, shoe=None):
     '''
     Returns the optimal action given a player's hand and the up card of the
     dealer
@@ -133,9 +190,7 @@ def optimal_action(hand, dealer):
     'd' = Double otherwise Stand
     '''
     action_evs = probability.action_ev(hand, dealer)
-    print(action_evs)
     optimal_action = action_evs.index(max(action_evs))
-    print(optimal_action)
 
     if optimal_action == Action.HIT:
         return 'H'
@@ -154,7 +209,8 @@ def optimal_action(hand, dealer):
 
 def calc_split_strategy(decks):
     # Split Table
-    rows = 10
+    shoe = Shoe(8)
+    rows = 9
     cols = 10
     bs_split = [ [0] * cols for _ in range(rows)]
 
@@ -180,14 +236,14 @@ def calc_split_strategy(decks):
             shoe.draw(upcard)
             shoe.draw(p1)
             shoe.draw(p2)
-            optimal = optimal_action(shoe, p_hand, dealer)
+            optimal = optimal_action(p_hand, dealer)
             print(f"{p_hand.sum} VS {dealer.hand.sum} --> '{optimal}'")
             shoe.reinstate_card(upcard)
             shoe.reinstate_card(p1)
             shoe.reinstate_card(p2)
             bs_split[row][col] = optimal
 
-        print(DataFrame(bs_split))
+    print(DataFrame(bs_split))
 
 def calc_hard_strategy(decks):
 
@@ -222,7 +278,7 @@ def calc_hard_strategy(decks):
             d_hand = Hand([upcard])
             shoe.draw(upcard)
             optimal = optimal_action(p_hand, dealer)
-            print(f"{p_hand.sum} VS {d_hand.sum} --> '{optimal}'")
+            #print(f"{p_hand.sum} VS {d_hand.sum} --> '{optimal}'")
             shoe.reinstate_card(upcard)
             bs_hard[row][col] = optimal
 
@@ -256,7 +312,7 @@ def calc_soft_strategy(decks):
 
             shoe.draw(upcard)
             shoe.draw(p1)
-            optimal = optimal_action(shoe, p_hand, dealer)
+            optimal = optimal_action(p_hand, dealer)
             print(f"{p_hand.sum} VS {dealer.hand.sum} --> '{optimal}'")
             shoe.reinstate_card(upcard)
             shoe.reinstate_card(p1)

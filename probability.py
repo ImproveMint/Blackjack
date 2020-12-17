@@ -1,7 +1,6 @@
 '''
 This class calculates useful probabilities for the game of blackjack
 '''
-
 from copy import deepcopy
 from card import Card, Rank, Suit
 from hand import Hand
@@ -91,7 +90,7 @@ def prob_outcomes(hand, dealer_probs):
 
     return outcomes
 
-def action_ev(hand, dealer):
+def action_ev(hand, dealer, shoe=None):
     '''
     Returns the expected value/reward of each possible action given a hand and the
     dealer's upcard
@@ -125,7 +124,6 @@ def hit(hand, index, dealer_probs):
 
     Assumptions:    Infinite shoe
     '''
-
     ev = 0
 
     # Hit the hand with every rank in the deck Ace through King
@@ -137,19 +135,33 @@ def hit(hand, index, dealer_probs):
         # 4 cases:
         # Hit busted hand
         if new_hand.sum > 21:
+            # print("BUST")
+            # print(new_hand)
             ev += prob_cards(new_hand, index)*-1
 
         # Hit made hand 21
         elif new_hand.sum == 21:
+            # print("21!")
+            # print(new_hand)
             ev += __expected_reward(new_hand, dealer_probs, index)
+
+        # 6 card charlie rule
+        elif len(new_hand.cards) >= 6:
+            # print("Charlie!")
+            # print(new_hand)
+            ev += prob_cards(new_hand, index)
 
         # Hit results in another decision - explore better option (recursive)
         elif not hand.double and not hand.split_aces:
             # from here we can either hit or stand and we want the better of the 2
+            # print("New action!")
+            # print(new_hand)
             ev += max(hit(new_hand, index+1, dealer_probs), stand(new_hand, dealer_probs))*prob_card(card)
 
         # Hit results in another decision but only decision avaiable is to stand
         else:
+            # print("Standing")
+            # print(new_hand)
             ev += stand(new_hand, dealer_probs)*prob_card(card)
 
     return ev
@@ -165,14 +177,19 @@ def double(hand, dealer_probs):
     Returns the expected reward/value of doubling down
     '''
     hand.double_down()
-    return 2*hit(hand, 2, dealer_probs)
+    ev = 2*hit(hand, 2, dealer_probs)
+    hand.double = False
+    return ev
 
 def split(hand, dealer_probs):
     '''
     Returns the expected reward/value of splitting
     '''
     hand.split_hand() # Split hand - removes a card
-    return 2*hit(hand, 1, dealer_probs) # then calls hit to run all simulations after hit
+
+    ev = 2*hit(hand, 1, dealer_probs) # then calls hit to run all simulations after hit
+    hand.add_card(hand.cards[0])
+    return ev
 
 def __expected_reward(hand, dealer_probs, index):
     '''
