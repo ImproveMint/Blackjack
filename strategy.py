@@ -1,5 +1,7 @@
 '''
 *Differences in charts may be due to slight variations in rules
+I think the differences in strategy expecially in soft chart
+is due to 6 card charlie rule. 
 
 My Optimal Hard Strategy
     2  3  4  5  6  7  8  9  T  A
@@ -29,6 +31,19 @@ My optimal soft strategy
 18  S  d  d  d  d  S  S  H  H  H
 19  S  S  S  S  S  S  S  S  S  S
 
+GAME update optimal strategy.... needs work
+9 cent differnce vs 6. 12 cent vs 5
+13  .  .  .  H  H  .  .  .  .  .
+
+6 cent different vs 5 and 3 cent vs 6
+14  .  .  .  H  H  .  .  .  .  .
+
+Against 4 it's like a 5 cent different but against 5 it's 1.5
+15  .  .  H  H  .  .  .  .  .  .
+
+1.5 cent difference
+16  .  .  H  .  .  .  .  .  .  .
+
 *Differences in my strategy and basic
    2  3  4  5  6  7  8  9  T  A
 13 .  .  .  D  .  .  .  .  .  .
@@ -37,7 +52,7 @@ My optimal soft strategy
 
 My optimal split strategy differences these should all be splits
     2  3  4  5  6  7  8  9  T  A
-22  H  H  H  P  P  P  H  H  H  H
+22  H  H  H  H  P  H  H  H  H  H
 33  H  H  H  P  P  P  H  H  H  H
 44  H  H  H  H  H  H  H  H  H  H
 55  D  D  D  D  D  D  D  D  H  H
@@ -48,16 +63,15 @@ My optimal split strategy differences these should all be splits
 TT  S  S  S  S  S  S  S  S  S  S
 
     2  3  4  5  6  7  8  9  T  A
-22  .  .  P  .  .  .  .  .  .  .
+22  .  .  P  P  .  P  .  .  .  .
 33  .  .  P  .  .  .  .  .  .  .
 88  .  .  .  .  .  .  .  .  P  P
 '''
 
-
 from pandas import DataFrame
 from card import Card, Rank, Suit
 from hand import Hand
-from dealer import Dealer
+from game import Game
 import probability
 from shoe import Shoe
 import numpy
@@ -177,7 +191,7 @@ def infinite_complete_action(hand, dealer):
         return complete_strat_hard8[lookup_row, lookup_col]
 '''
 
-def optimal_action(hand, dealer, shoe=None):
+def optimal_action(game):
     '''
     Returns the optimal action given a player's hand and the up card of the
     dealer
@@ -189,7 +203,7 @@ def optimal_action(hand, dealer, shoe=None):
     'D' = Double otherwise Hit
     'd' = Double otherwise Stand
     '''
-    action_evs = probability.action_ev(hand, dealer)
+    action_evs = probability.action_ev(game)
     optimal_action = action_evs.index(max(action_evs))
 
     if optimal_action == Action.HIT:
@@ -227,20 +241,13 @@ def calc_split_strategy(decks):
 
             p1 = Card(p_rank, Suit.Spade)
             p2 = Card(p_rank, Suit.Spade)
+            p_hand = Hand([p1,p2])
             upcard = Card(d_rank, Suit.Spade)
 
-            p_hand = Hand([p1,p2])
-            dealer = Dealer(shoe)
-            dealer.deal_card(upcard)
+            game = Game(p_hand, upcard, shoe)
 
-            shoe.draw(upcard)
-            shoe.draw(p1)
-            shoe.draw(p2)
-            optimal = optimal_action(p_hand, dealer)
-            print(f"{p_hand.sum} VS {dealer.hand.sum} --> '{optimal}'")
-            shoe.reinstate_card(upcard)
-            shoe.reinstate_card(p1)
-            shoe.reinstate_card(p2)
+            optimal = optimal_action(game)
+            shoe.reset_shoe()
             bs_split[row][col] = optimal
 
     print(DataFrame(bs_split))
@@ -271,16 +278,13 @@ def calc_hard_strategy(decks):
 
             upcard = Card(d_rank, Suit.Spade)
 
-            dealer = Dealer(shoe)
-            dealer.deal_card(upcard)
-
             p_hand = Hand([p1,p2])
-            d_hand = Hand([upcard])
-            shoe.draw(upcard)
-            optimal = optimal_action(p_hand, dealer)
-            #print(f"{p_hand.sum} VS {d_hand.sum} --> '{optimal}'")
-            shoe.reinstate_card(upcard)
+
+            game = Game(p_hand, upcard, shoe)
+
+            optimal = optimal_action(game)
             bs_hard[row][col] = optimal
+            shoe.reset_shoe()
 
     print(DataFrame(bs_hard))
 
@@ -288,7 +292,7 @@ def calc_soft_strategy(decks):
 
     shoe = Shoe(decks)
 
-    rows = 8
+    rows = 7 # S13 - S19
     cols = 10
     bs_soft = [ [0] * cols for _ in range(rows)]
 
@@ -296,26 +300,19 @@ def calc_soft_strategy(decks):
     for row in range(0, rows):
         for col in range(0, cols):
             assert(shoe.cards_in_shoe == 52*shoe.DECKS)
-            #print(f"({row}, {col})")
             d_rank = Rank(col+1) # dealer's up card rank
 
             if d_rank == 10:
                 d_rank = Rank.Ace
 
+            upcard = Card(d_rank, Suit.Spade)
             p1 = Card(Rank.Ace, Suit.Spade)
             p2 = Card(Rank(row+1), Suit.Spade)
-            upcard = Card(d_rank, Suit.Spade)
-
             p_hand = Hand([p1,p2])
-            dealer = Dealer(shoe)
-            dealer.deal_card(upcard)
 
-            shoe.draw(upcard)
-            shoe.draw(p1)
-            optimal = optimal_action(p_hand, dealer)
-            print(f"{p_hand.sum} VS {dealer.hand.sum} --> '{optimal}'")
-            shoe.reinstate_card(upcard)
-            shoe.reinstate_card(p1)
+            game = Game(p_hand, upcard, shoe)
+            optimal = optimal_action(game)
             bs_soft[row][col] = optimal
+            shoe.reset_shoe()
 
     print(DataFrame(bs_soft))
