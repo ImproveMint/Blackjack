@@ -6,6 +6,7 @@ class Hand():
         self.cards = cards
         self.soft = False
         self.double = False
+        self.index = len(cards)
         self.split = False
         self.split_aces = False
         self.sum = 0
@@ -56,6 +57,7 @@ class Hand():
         assert(self.cards[0].blackjack_value() == self.cards[1].blackjack_value())
 
         self.split = True
+        self.index = 1
 
         if self.cards[0].rank == Rank.Ace:
             self.split_aces = True
