@@ -35,7 +35,7 @@ class Shoe():
         '''
         return self.r_count/(self.cards_in_shoe/52)
 
-    def draw(self, card):
+    def draw_card(self, card):
         '''
         This function draws 'card' from the shoe and updates the shoe's
         statistics
@@ -50,6 +50,11 @@ class Shoe():
         # post conditions
         assert(self.cards_in_shoe >= 0)
         assert(self.ranks_left[card.rank] >= 0)
+
+    def draw_hand(self, hand):
+
+        for card in hand.cards:
+            self.draw_card(card)
 
     def reinstate_card(self, card):
         '''
